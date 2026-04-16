@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>考場資訊看板 - 視覺優化版</title>
+    <style>
+        :root {
+            --bg-dark: #000000;
+            --info-panel-bg: #ffffff;
+            --accent-blue: #0984e3;
+            --accent-red: #d63031;
+            --accent-green: #16a085;
+            --huge-font-size: 8.5rem; 
+        }
+        
+        body, html { 
+            margin: 0; padding: 0; height: 100%; 
+            font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; 
+            overflow: hidden; background: #000; 
+        }
+
+        .container { display: flex; height: 100vh; width: 100vw; }
+
+        /* 左側資訊區 (50%) */
+        .info-side { 
+            width: 50%; background: var(--info-panel-bg); 
+            display: flex; flex-direction: column; 
+            padding: 40px; box-sizing: border-box; 
+            justify-content: space-between;
+        }
+
+        /* 右側時鐘區 (50%) */
+        .clock-side { 
+            width: 50%; background: var(--bg-dark); 
+            display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; 
+            border-left: 5px solid #333;
+        }
+
+        /* 隱藏式設定視窗 */
+        #configModal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: white; padding: 30px; border-radius: 15px; 
+            box-shadow: 0 0 100px rgba(0,0,0,0.8);
+            z-index: 100; display: block; width: 680px;
+        }
+        .config-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 90; display: block; }
+        .config-btn-fixed { position: fixed; top: 10px; left: 10px; z-index: 80; opacity: 0.1; cursor: pointer; background: #ccc; border: none; padding: 8px; border-radius: 5px; }
+
+        /* 左上顯示：科目名稱增加右邊距 */
+        .subject-container { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-around; 
+            padding-bottom: 30px;
+        }
+        .subject-block { 
+            border-left: 25px solid var(--accent-blue); 
+            padding-left: 20px;
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        .sub-row { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            width: 100%; 
+            padding-right: 50px; /* 關鍵：增加與右側邊界的間距 */
+        }
+        
+        .sub-time-wrap { display: flex; align-items: center; gap: 20px; }
+        .sub-time { font-size: 3.5rem; color: #333; font-family: 'Consolas', 'Arial'; font-weight: bold; letter-spacing: -2px; }
+        .session-tag { background: var(--accent-blue); color: white; padding: 5px 15px; border-radius: 8px; font-size: 2.2rem; font-weight: bold; }
+        
+        .sub-name-text { 
+            font-size: var(--huge-font-size); 
+            font-weight: 900; 
+            color: #000; 
+            letter-spacing: -3px; 
+            line-height: 1;
+            text-align: right;
+            flex: 1; /* 讓文字自動調整位置 */
+        }
+
+        /* 左下顯示樣式 */
+        .stats-block { border-top: 10px solid #f0f0f0; padding-top: 25px; display: flex; gap: 20px; height: 180px; }
+        .stats-left { flex: 0 0 52%; border-right: 4px dashed #ddd; }
+        .stats-right { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-left: 20px; padding-right: 30px; }
+
+        .stat-label { color: #888; font-size: 1.6rem; font-weight: bold; }
+        .val-large { font-size: var(--huge-font-size); color: var(--accent-green); font-weight: 900; line-height: 1; margin-top: 5px; }
+        .stat-inline { display: flex; align-items: baseline; gap: 20px; margin-bottom: 8px; }
+        .val-sub { font-size: 3.2rem; font-weight: bold; color: #333; flex: 1; word-break: break-all; }
+
+        /* 右側時鐘樣式 */
+        .analog-clock { width: 72vh; height: 72vh; background: white; border: 35px solid #2c3e50; border-radius: 50%; position: relative; margin-bottom: 10px; }
+        .clock-face { position: relative; width: 100%; height: 100%; }
+        .number { position: absolute; width: 100%; height: 100%; text-align: center; font-size: 5.5rem; font-weight: 900; color: #000; padding: 25px; box-sizing: border-box; }
+        .dot { position: absolute; width: 100%; height: 100%; text-align: center; }
+        .dot::after { content: ''; display: inline-block; width: 8px; height: 25px; background: #bbb; }
+        .dot.heavy::after { width: 18px; height: 50px; background: #000; }
+        .hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom; border-radius: 20px; }
+        .hour-hand { width: 28px; height: 26%; background: #000; z-index: 3; }
+        .min-hand { width: 18px; height: 40%; background: #333; z-index: 2; }
+        .sec-hand { width: 6px; height: 45%; background: var(--accent-red); z-index: 1; }
+        .center-dot { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; background: var(--accent-red); border-radius: 50%; transform: translate(-50%, -50%); z-index: 10; }
+        #digital-clock { font-family: 'Consolas', monospace; font-size: 11.5rem; font-weight: bold; color: #00ff88; line-height: 1; text-shadow: 0 0 25px rgba(0, 255, 136, 0.4); }
+
+        /* 設定視窗元件 */
+        .modal-row { margin-bottom: 15px; display: flex; gap: 10px; align-items: center; }
+        .modal-row span { width: 80px; font-weight: bold; color: #444; }
+        .modal-row input { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
+        .del-btn { background: #ff4757; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        .confirm-btn { width: 100%; padding: 20px; background: var(--accent-green); color: white; border: none; border-radius: 10px; font-size: 1.6rem; cursor: pointer; font-weight: bold; margin-top: 15px; }
+        .label-text { font-size: 0.9rem; color: #666; margin-bottom: 5px; display: block; }
+    </style>
+</head>
+<body>
+
+<button class="config-btn-fixed" onclick="showConfig()">⚙ 設定</button>
+
+<div id="overlay" class="config-overlay" onclick="hideConfig()"></div>
+<div id="configModal">
+    <h2 style="margin:0 0 20px 0; text-align:center;">考場資訊設定</h2>
+    <div id="subjectInputs">
+        <div class="modal-row"><span>第1節</span><input type="text" id="inSub1" style="flex:2" value="國語"><input type="time" id="inStart1" value="08:40"><input type="time" id="inEnd1" value="09:20"><button class="del-btn" onclick="clearRow(1)">刪除</button></div>
+        <div class="modal-row"><span>第2節</span><input type="text" id="inSub2" style="flex:2" value="數學"><input type="time" id="inStart2" value="09:30"><input type="time" id="inEnd2" value="10:10"><button class="del-btn" onclick="clearRow(2)">刪除</button></div>
+        <div class="modal-row"><span>第3節</span><input type="text" id="inSub3" style="flex:2" value="英語"><input type="time" id="inStart3" value="10:30"><input type="time" id="inEnd3" value="11:10"><button class="del-btn" onclick="clearRow(3)">刪除</button></div>
+    </div>
+    <hr style="margin:20px 0; border:0; border-top:2px solid #eee;">
+    <div class="modal-row">
+        <div style="flex:1"><span class="label-text">應到人數</span><input type="number" id="inTotal" style="width:100%" value="30"></div>
+        <div style="flex:1"><span class="label-text">缺考人數</span><input type="number" id="inAbsCount" style="width:100%" value="0"></div>
+    </div>
+    <div class="modal-row">
+        <div style="flex:1"><span class="label-text">缺考座號</span><input type="text" id="inAbsNo" style="width:100%" placeholder="如: 05, 12"></div>
+        <div style="flex:1"><span class="label-text">抽離座號</span><input type="text" id="inPullNo" style="width:100%" placeholder="如: 08"></div>
+    </div>
+    <button class="confirm-btn" onclick="hideConfig()">✅ 確認並套用看板</button>
+</div>
+
+<div class="container">
+    <div class="info-side">
+        <div class="subject-container" id="subjectList"></div>
+        <div class="stats-block">
+            <div class="stats-left">
+                <span class="stat-label">應到 / 實到人數</span>
+                <div class="val-large"><span id="outTotal">30</span> / <span id="outActual">30</span></div>
+            </div>
+            <div class="stats-right">
+                <div class="stat-inline"><span class="stat-label" style="color:var(--accent-red)">缺考號碼</span><span id="outAbsNo" class="val-sub" style="color:var(--accent-red)">-</span></div>
+                <div class="stat-inline"><span class="stat-label" style="color:var(--accent-blue)">抽離座號</span><span id="outPullNo" class="val-sub" style="color:var(--accent-blue)">-</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="clock-side">
+        <div class="analog-clock"><div class="clock-face" id="clockFace"><div class="center-dot"></div><div id="hour" class="hand hour-hand"></div><div id="min" class="hand min-hand"></div><div id="sec" class="hand sec-hand"></div></div></div>
+        <div id="digital-clock">00:00:00</div>
+    </div>
+</div>
+
+<script>
+    function initClock() {
+        const face = document.getElementById('clockFace');
+        for (let i = 1; i <= 60; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'dot' + (i % 5 === 0 ? ' heavy' : '');
+            dot.style.transform = `rotate(${i * 6}deg)`;
+            face.appendChild(dot);
+            if (i % 5 === 0) {
+                const num = document.createElement('div');
+                num.className = 'number';
+                num.style.transform = `rotate(${i * 6}deg)`;
+                num.innerHTML = `<span style="display:inline-block; transform:rotate(${-i * 6}deg)">${i/5}</span>`;
+                face.appendChild(num);
+            }
+        }
+    }
+    function clearRow(n) { document.getElementById('inSub' + n).value = ""; document.getElementById('inStart' + n).value = ""; document.getElementById('inEnd' + n).value = ""; }
+    function showConfig() { document.getElementById('configModal').style.display = 'block'; document.getElementById('overlay').style.display = 'block'; }
+    function hideConfig() { document.getElementById('configModal').style.display = 'none'; document.getElementById('overlay').style.display = 'none'; updateBoard(); }
+    
+    function updateBoard() {
+        const labels = ["第一節", "第二節", "第三節"];
+        let html = '';
+        for (let i = 1; i <= 3; i++) {
+            const sub = document.getElementById('inSub' + i).value;
+            const start = document.getElementById('inStart' + i).value;
+            const end = document.getElementById('inEnd' + i).value;
+            if(sub.trim() !== ""){ 
+                html += `
+                <div class="subject-block">
+                    <div class="sub-row">
+                        <div class="sub-time-wrap">
+                            <span class="sub-time">${start}-${end}</span>
+                            <span class="session-tag">${labels[i-1]}</span>
+                        </div>
+                        <span class="sub-name-text">${sub}</span>
+                    </div>
+                </div>`; 
+            }
+        }
+        document.getElementById('subjectList').innerHTML = html;
+        const total = parseInt(document.getElementById('inTotal').value) || 0, abs = parseInt(document.getElementById('inAbsCount').value) || 0;
+        document.getElementById('outTotal').textContent = total; document.getElementById('outActual').textContent = total - abs;
+        document.getElementById('outAbsNo').textContent = document.getElementById('inAbsNo').value || "無";
+        document.getElementById('outPullNo').textContent = document.getElementById('inPullNo').value || "無";
+    }
+    function updateClock() {
+        const now = new Date(), h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+        document.getElementById('digital-clock').textContent = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        document.getElementById('sec').style.transform = `translateX(-50%) rotate(${s * 6}deg)`;
+        document.getElementById('min').style.transform = `translateX(-50%) rotate(${m * 6 + s * 0.1}deg)`;
+        document.getElementById('hour').style.transform = `translateX(-50%) rotate(${(h % 12) * 30 + m * 0.5}deg)`;
+    }
+    initClock(); setInterval(updateClock, 1000); updateClock(); updateBoard();
+</script>
+</body>
+</html>
